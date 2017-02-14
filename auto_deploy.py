@@ -5,20 +5,75 @@ import os
 import sys
 import subprocess
 import json
+import pdb
 
-def deploy_main(path):
+def get_cluster_info(path):
 
     proc = subprocess.Popen(['fuel2', 'node', 'list', '-f', 'json'], stdout=subprocess.PIPE)
+    proc.wait()
 
     if proc.returncode != 0:
         print 'command fuel2 not found \n'
-        sys.exit(1)
+        sys.exit(proc.returncode)
 
     nodeinfo = proc.communicate()
 
     nodeinfo_json = json.loads(nodeinfo[0])
 
-    print "ggyy \n"
+    node_num = len(nodeinfo_json)
+
+    id_list = []  # store node id
+
+    for num in range(node_num):
+        if nodeinfo_json[num]['status'] != 'ready':
+            print 'The original environment is not ready'
+            sys.exit(1)
+
+        id_list.append(str(nodeinfo_json[num]['id']))
+
+    cluster = nodeinfo_json[0]['cluster']
+
+    proc = subprocess.Popen(['fuel', '--env', str(cluster), 'network', 'download', '--dir', path], stdout=subprocess.PIPE)
+    proc.wait()
+
+    if proc.returncode != 0:
+        print 'command fuel not found \n'
+        sys.exit(proc.returncode)
+
+    proc = subprocess.Popen(['fuel', '--env', str(cluster), 'settings', 'download', '--dir', path],
+                            stdout=subprocess.PIPE)
+    proc.wait()
+
+    proc = subprocess.Popen(['fuel', '--env', str(cluster), 'deployment', 'default', '--dir', path],
+                            stdout=subprocess.PIPE)
+    proc.wait()
+
+    proc = subprocess.Popen(['fuel', '--env', str(cluster), 'network', 'download', '--dir', path],
+                            stdout=subprocess.PIPE)
+    proc.wait()
+
+    for id_list_idx in range(node_num):
+
+        proc = subprocess.Popen(['fuel', 'node', '--node-id', id_list[id_list_idx], '--network', '--download', '--dir', path],
+                                stdout=subprocess.PIPE)
+        proc.wait()
+
+        proc = subprocess.Popen(
+            ['fuel', 'node', '--node-id', id_list[id_list_idx], '--attributes', '--download', '--dir', path],
+            stdout=subprocess.PIPE)
+        proc.wait()
+
+        proc = subprocess.Popen(
+            ['fuel', 'node', '--node-id', id_list[id_list_idx], '--disk', '--download', '--dir', path],
+            stdout=subprocess.PIPE)
+        proc.wait()
+
+    return nodeinfo_json
+
+def deploy_main(cluster_info_json):
+    pass
+    #proc = subprocess.Popen(['fuel2', 'node', 'list', '-f', 'json'], stdout=subprocess.PIPE)
+
 
 # class FooAction(argparse.Action):
 #      def __init__(self, option_strings, dest, nargs=None, **kwargs):
@@ -88,7 +143,10 @@ if not os.path.isdir(args.dir):
 #    print os.path.isdir(args.dir)
 
 if args.deployment:
-    deploy_main(args.dir)
+
+    cluster_info_json = get_cluster_info(args.dir)
+
+    deploy_main(cluster_info_json)
     print args.deployment
 
 print args.dir
